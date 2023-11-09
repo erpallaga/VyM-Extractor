@@ -8,6 +8,7 @@ from tkinter import messagebox
 import threading
 import webbrowser
 from bs4 import BeautifulSoup
+import pandas as pd
 
 # Function to extract the content from the EPUB file
 def extract_content_from_epub(epub_path):
@@ -110,5 +111,5 @@ def extract_and_open_text_file(epub_file_path):
 root = tk.Tk()
 root.title("VyM Extractor")
 button = tk.Button(root, text="Selecciona EPUB", command=handle_extraction, height=3, width=30)
-button.pack()  # Add some padding around the button for better aesthetics
+button.pack()  
 root.mainloop()
