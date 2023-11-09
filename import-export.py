@@ -9,6 +9,7 @@ import threading
 import webbrowser
 from bs4 import BeautifulSoup
 import pandas as pd
+import sys
 
 # Function to extract the content from the EPUB file
 def extract_content_from_epub(epub_path):
@@ -61,16 +62,21 @@ def extract_all_weekly_programs(extracted_folder):
 
     return all_weekly_programs
 
-# Function to save the weekly programs to a text file
-def save_weekly_programs_to_text(weekly_programs, text_file_path):
-    with open(text_file_path, 'w', encoding='utf-8') as file:
-        for week, program in weekly_programs.items():
-            file.write(f'{week}:\n')
-            file.write('\n'.join(program))
-            file.write('\n\n')
+# Function to format the weekly programs into a columnar structure for Excel
+def format_weekly_programs_for_excel(all_weekly_programs):
+    # Sort the weeks based on the date
+    sorted_weeks = sorted(all_weekly_programs.keys(), key=lambda x: re.search(r'\d{1,2}-\d{1,2}', x).group())
 
-# Main function to process the EPUB and extract the programs
-def extract_weekly_schedules(epub_path, output_file_path):
+    # Use zip to combine the weeks into a columnar format for Excel
+    columns = zip(*[all_weekly_programs.get(week, [''] * max(len(p) for p in all_weekly_programs.values())) for week in sorted_weeks])
+
+    # Create a DataFrame from the columns
+    df = pd.DataFrame(columns, columns=sorted_weeks)
+
+    return df
+
+# Main function to process the EPUB and extract the programs in a formatted way for Excel
+def extract_weekly_schedules_to_excel(epub_path, output_excel_file_path):
     # Extract the EPUB content to a temporary directory
     extracted_folder = extract_content_from_epub(epub_path)
     
@@ -80,8 +86,11 @@ def extract_weekly_schedules(epub_path, output_file_path):
     # Clean up the extracted files
     shutil.rmtree(extracted_folder)
     
-    # Save the extracted programs to a text file
-    save_weekly_programs_to_text(all_weekly_programs, output_file_path)
+    # Format the programs for Excel
+    df_weekly_programs = format_weekly_programs_for_excel(all_weekly_programs)
+
+    # Save the DataFrame to an Excel file
+    df_weekly_programs.to_excel(output_excel_file_path, index=False)
 
 # GUI functions
 def handle_extraction():
@@ -92,21 +101,24 @@ def handle_extraction():
         return
     
     # Create the thread and set it as a daemon
-    extraction_thread = threading.Thread(target=extract_and_open_text_file, args=(epub_file_path,))
+    extraction_thread = threading.Thread(target=extract_and_open_excel_file, args=(epub_file_path,))
     extraction_thread.daemon = True
     extraction_thread.start()
 
-def extract_and_open_text_file(epub_file_path):
+def extract_and_open_excel_file(epub_file_path):
     try:
-        output_text_file_path = 'weekly_programs.txt'
-        extract_weekly_schedules(epub_file_path, output_text_file_path)
-        webbrowser.open(output_text_file_path)
+        output_excel_file_path = 'weekly_programs.xlsx'
+        extract_weekly_schedules_to_excel(epub_file_path,output_excel_file_path)
+        print("Attempting to open Excel file")  # Debug print
+        webbrowser.open(output_excel_file_path)
+        print("Excel file should be open now")  # Debug print
     except Exception as e:
-        # If there's an error, show it in a message box in the main thread
-        root.after(1, lambda: messagebox.showerror("Error", str(e)))
+        error_message = str(e)
+        print(f"Caught an exception: {error_message}")  # Debug print
+        root.after(1, lambda: messagebox.showerror("Error", error_message))
     finally:
-        # Schedule the GUI to close in the main thread
-        root.after(1, lambda: root.destroy() or sys.exit())
+        print("Attempting to close the GUI")  # Debug print
+        root.after(1, lambda: root.destroy() or sys.exit())   
 
 root = tk.Tk()
 root.title("VyM Extractor")
