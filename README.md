@@ -21,7 +21,7 @@ Required Python libraries:
 - openpyxl
 - 
 ### Setup
-- Clone the repository to your local machine: git clone https://github.com/erpallaga/VyM-Schedule-Extractor.git
+- Clone the repository to your local machine: git clone https://github.com/erpallaga/VyM-Extractor.git
 - Navigate to the cloned directory and install required Python packages
 
 ## Use
