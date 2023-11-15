@@ -60,7 +60,7 @@ def adjust_program_length(program):
     # Define the fixed lengths for each section
     fixed_lengths = {
         'SEAMOS MEJORES MAESTROS': 4,
-        'NUESTRA VIDA CRISTIANA': 5
+        'NUESTRA VIDA CRISTIANA': 4  # Cambio de 5 a 4
     }
 
     for section, length in fixed_lengths.items():
@@ -73,13 +73,17 @@ def adjust_program_length(program):
 
             while end_idx < len(program) and not any(sec in program[end_idx] for sec in fixed_lengths if sec != section):
                 item = program[end_idx]
-                # For 'NUESTRA VIDA CRISTIANA', only include items with a leading number or a song
+                # For 'NUESTRA VIDA CRISTIANA', only include items with a leading number
                 if section == 'NUESTRA VIDA CRISTIANA' and not item.startswith('Canción'):
                     if re.match(r'^\d+\.', item):
                         section_items.append(item)
                 else:
                     section_items.append(item)
                 end_idx += 1
+
+            # Para 'NUESTRA VIDA CRISTIANA', si el último elemento es una canción, lo sacamos del conteo
+            if section == 'NUESTRA VIDA CRISTIANA' and section_items[-1].startswith('Canción'):
+                final_song = section_items.pop()
 
             # Calculate the number of items in the section
             section_length = len(section_items)
@@ -88,7 +92,12 @@ def adjust_program_length(program):
                 section_items += [''] * (length - section_length)
             program[start_idx:end_idx] = section_items
 
+            # Añade la canción al final de la sección 'NUESTRA VIDA CRISTIANA'
+            if section == 'NUESTRA VIDA CRISTIANA':
+                program.insert(end_idx, final_song)
+
     return program
+
 
 # Function to format the weekly programs into a columnar structure for Excel
 def format_weekly_programs_for_excel(all_weekly_programs):
