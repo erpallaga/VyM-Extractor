@@ -22,9 +22,9 @@ def extract_content_from_epub(epub_path):
 # Function to extract the weekly programs from the extracted EPUB content
 def extract_all_weekly_programs(extracted_folder):
     oebps_folder = os.path.join(extracted_folder, 'OEBPS')
-    xhtml_files = [f for f in os.listdir(oebps_folder) if f.endswith('.xhtml')][1:]
+    xhtml_files = [f for f in os.listdir(oebps_folder) if f.endswith('.xhtml') and not f.endswith('-extracted.xhtml')][1:]
     all_weekly_programs = {}
-    date_pattern = re.compile(r'\d{1,2}-\d{1,2}\sDE\s[A-ZÑ]+')
+    date_pattern = re.compile(r'\d{1,2}(\sDE\s[A-ZÑ]+|-\d{1,2})\s(?:A\s\d{1,2}\sDE\s[A-ZÑ]+)?')
     song_pattern = re.compile(r'Canción \d+')
 
     for file_name in xhtml_files:
