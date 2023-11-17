@@ -10,6 +10,7 @@ import webbrowser
 from bs4 import BeautifulSoup
 import pandas as pd
 import sys
+from datetime import datetime, timedelta
 
 # Function to extract the content from the EPUB file
 def extract_content_from_epub(epub_path):
@@ -20,12 +21,21 @@ def extract_content_from_epub(epub_path):
     return temp_dir
 
 # Function to extract the weekly programs from the extracted EPUB content
-def extract_all_weekly_programs(extracted_folder):
+def extract_all_weekly_programs(extracted_folder, target_weekday=1):  # 1 = martes por defecto
     oebps_folder = os.path.join(extracted_folder, 'OEBPS')
     xhtml_files = [f for f in os.listdir(oebps_folder) if f.endswith('.xhtml') and not f.endswith('-extracted.xhtml')][1:]
     all_weekly_programs = {}
-    date_pattern = re.compile(r'\d{1,2}(\sDE\s[A-ZÑ]+|-\d{1,2})\s(?:A\s\d{1,2}\sDE\s[A-ZÑ]+)?')
-    song_pattern = re.compile(r'Canción \d+')
+
+    # Expresión regular para extraer la fecha inicial
+    date_pattern = re.compile(r'(\d{1,2})\sDE\s([A-ZÑ]+)|(\d{1,2})-(\d{1,2})\sDE\s([A-ZÑ]+)')
+    
+    # Mapeo de nombres de meses a números
+    month_mapping = {
+        "ENERO": 1, "FEBRERO": 2, "MARZO": 3, "ABRIL": 4, "MAYO": 5, "JUNIO": 6,
+        "JULIO": 7, "AGOSTO": 8, "SEPTIEMBRE": 9, "OCTUBRE": 10, "NOVIEMBRE": 11, "DICIEMBRE": 12
+    }
+    current_year = datetime.now().year
+    current_month = datetime.now().month
 
     for file_name in xhtml_files:
         file_path = os.path.join(oebps_folder, file_name)
@@ -38,20 +48,34 @@ def extract_all_weekly_programs(extracted_folder):
 
         for header in headers:
             header_text = header.get_text(strip=True)
-            if date_pattern.search(header_text):
-                if current_week_title and current_week_program:
-                    all_weekly_programs[current_week_title] = adjust_program_length(current_week_program)
-                current_week_title = header_text
+            date_match = date_pattern.search(header_text)
+            if date_match:
+                if date_match.group(3):  # Si es un rango (ej., 1-7 DE ENERO)
+                    day = date_match.group(3)
+                    month_str = date_match.group(5)
+                else:  # Si es una fecha única
+                    day = date_match.group(1)
+                    month_str = date_match.group(2)
+
+                program_month = month_mapping[month_str.upper()]
+                # Determina el año del programa
+                program_year = current_year + 1 if program_month < current_month else current_year
+                initial_date = datetime(program_year, program_month, int(day))
+                
+                # Calcula el día de la semana de la fecha inicial
+                day_of_week = initial_date.weekday()
+                # Calcula cuántos días agregar para llegar al día de la semana deseado
+                days_to_add = (target_weekday - day_of_week) % 7
+                adjusted_date = initial_date + timedelta(days=days_to_add)
+                formatted_date = adjusted_date.strftime('%d/%m/%Y')
+                current_week_title = formatted_date
                 current_week_program = []
+
             elif current_week_title:
-                # Extract only the song part if it's a song line
-                if 'Canción' in header_text and 'oración' in header_text:
-                    song_match = song_pattern.search(header_text)
-                    header_text = song_match.group() if song_match else header_text
                 current_week_program.append(header_text)
 
         if current_week_title and current_week_program:
-            all_weekly_programs[current_week_title] = adjust_program_length(current_week_program)
+            all_weekly_programs[current_week_title] = current_week_program
 
     return all_weekly_programs
 
