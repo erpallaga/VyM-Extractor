@@ -12,7 +12,7 @@ import pandas as pd
 import sys
 from datetime import datetime, timedelta
 
-# Function to extract the content from the EPUB file
+# Function to extract the content from the EPUB file (idéntica en ambos códigos)
 def extract_content_from_epub(epub_path):
     with zipfile.ZipFile(epub_path, 'r') as zip_ref:
         # Extract to a temporary directory
@@ -20,13 +20,13 @@ def extract_content_from_epub(epub_path):
         zip_ref.extractall(temp_dir)
     return temp_dir
 
-# Function to extract the weekly programs from the extracted EPUB content
+# Function to extract the weekly programs from the extracted EPUB content (tomada del Código 1)
 def extract_all_weekly_programs(extracted_folder, target_weekday=1):  # 1 = martes por defecto
     oebps_folder = os.path.join(extracted_folder, 'OEBPS')
     xhtml_files = [f for f in os.listdir(oebps_folder) if f.endswith('.xhtml') and not f.endswith('-extracted.xhtml')][1:]
     all_weekly_programs = {}
 
-    # Expresión regular para extraer la fecha inicial
+    # Expresión regular para extraer la fecha inicial (tomada del Código 1)
     date_pattern = re.compile(r'(\d{1,2})\sDE\s([A-ZÑ]+)|(\d{1,2})-(\d{1,2})\sDE\s([A-ZÑ]+)')
     
     # Mapeo de nombres de meses a números
@@ -68,23 +68,31 @@ def extract_all_weekly_programs(extracted_folder, target_weekday=1):  # 1 = mart
                 days_to_add = (target_weekday - day_of_week) % 7
                 adjusted_date = initial_date + timedelta(days=days_to_add)
                 formatted_date = adjusted_date.strftime('%d/%m/%Y')
-                current_week_title = formatted_date
+                sortable_date = adjusted_date.strftime('%Y-%m-%d')  # Fecha en formato ordenable
+                current_week_title = sortable_date
                 current_week_program = []
 
             elif current_week_title:
                 current_week_program.append(header_text)
 
         if current_week_title and current_week_program:
-            all_weekly_programs[current_week_title] = current_week_program
+            all_weekly_programs[current_week_title] = {
+                'date': formatted_date,  # Fecha en el formato original
+                'program': adjust_program_length(current_week_program)
+            }
 
-    return all_weekly_programs
+    # Ordenar los programas por la fecha ordenable
+    sorted_programs = {v['date']: v['program'] for k, v in sorted(all_weekly_programs.items())}
 
-# Helper function to adjust the length of each program section
+    return sorted_programs
+
+
+# Helper function to adjust the length of each program section (tomada del Código 2)
 def adjust_program_length(program):
     # Define the fixed lengths for each section
     fixed_lengths = {
         'SEAMOS MEJORES MAESTROS': 4,
-        'NUESTRA VIDA CRISTIANA': 4  # Cambio de 5 a 4
+        'NUESTRA VIDA CRISTIANA': 5
     }
 
     for section, length in fixed_lengths.items():
@@ -105,10 +113,6 @@ def adjust_program_length(program):
                     section_items.append(item)
                 end_idx += 1
 
-            # Para 'NUESTRA VIDA CRISTIANA', si el último elemento es una canción, lo sacamos del conteo
-            if section == 'NUESTRA VIDA CRISTIANA' and section_items[-1].startswith('Canción'):
-                final_song = section_items.pop()
-
             # Calculate the number of items in the section
             section_length = len(section_items)
             # Insert empty cells if needed
@@ -116,14 +120,9 @@ def adjust_program_length(program):
                 section_items += [''] * (length - section_length)
             program[start_idx:end_idx] = section_items
 
-            # Añade la canción al final de la sección 'NUESTRA VIDA CRISTIANA'
-            if section == 'NUESTRA VIDA CRISTIANA':
-                program.insert(end_idx, final_song)
-
     return program
 
-
-# Function to format the weekly programs into a columnar structure for Excel
+# Function to format the weekly programs into a columnar structure for Excel (tomada del Código 2)
 def format_weekly_programs_for_excel(all_weekly_programs):
     # Use the order of the weeks as they are in the dictionary
     sorted_weeks = list(all_weekly_programs.keys())
@@ -136,7 +135,7 @@ def format_weekly_programs_for_excel(all_weekly_programs):
 
     return df
 
-# Main function to process the EPUB and extract the programs in a formatted way for Excel
+# Main function to process the EPUB and extract the programs in a formatted way for Excel (similar en ambos códigos)
 def extract_weekly_schedules_to_excel(epub_path, output_excel_file_path):
     # Extract the EPUB content to a temporary directory
     extracted_folder = extract_content_from_epub(epub_path)
@@ -153,7 +152,7 @@ def extract_weekly_schedules_to_excel(epub_path, output_excel_file_path):
     # Save the DataFrame to an Excel file
     df_weekly_programs.to_excel(output_excel_file_path, index=False)
 
-# GUI functions
+# GUI functions (pueden tomarse del Código 1 o 2, ya que son similares)
 def handle_extraction():
     button['state'] = tk.DISABLED
     epub_file_path = filedialog.askopenfilename(title="Select EPUB file", filetypes=[("EPUB files", "*.epub")])
