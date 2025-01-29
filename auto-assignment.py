@@ -26,7 +26,7 @@ def weeks_since_assignment(last_date, current_date):
 def load_people_data(filename="people_data.xlsx"):
     """
     Loads two sheets from 'people_data.xlsx':
-      - 'people' (with roles/columns = YES/NO + optional Mod columns)
+      - 'people' (with roles/columns = YES/NO + optional Mod columns + 'Estudiante')
       - 'AssignmentHistory' (Name, Part, AssignmentDate).
     """
     xls = pd.ExcelFile(filename)
@@ -82,7 +82,7 @@ def get_last_assignment_date(df_history, person_name, part):
 def compute_score_and_lastdate(df_people, df_history, idx, part_key, meeting_date):
     """
     Returns (score, last_date) for a given person & part.
-     - score = (weeks since last assignment) * <part_key> Mod
+     - score = (weeks since last assignment) * <part_key> Mod (or "Estudiante Mod" if part_key="Estudiante")
      - last_date = their most recent assignment date of that part
     """
     row = df_people.loc[idx]
@@ -91,29 +91,62 @@ def compute_score_and_lastdate(df_people, df_history, idx, part_key, meeting_dat
     last_date = get_last_assignment_date(df_history, name, part_key)
     wks = weeks_since_assignment(last_date, meeting_date)
 
-    mod_col = part_key + " Mod"  # e.g. "Tesoros Mod"
+    mod_col = part_key + " Mod"  # e.g. "Tesoros Mod", or "Estudiante Mod"
     mod_val = row.get(mod_col, 1.0)
     score = wks * float(mod_val)
     return score, last_date
 
-def get_top_candidates(df_people, df_history, part_key, meeting_date, assigned_so_far, top_n=3):
+def get_top_candidates(
+    df_people, 
+    df_history, 
+    part_key, 
+    meeting_date, 
+    assigned_so_far, 
+    top_n=3, 
+    required_gender=None, 
+    must_be_estudiante=False
+):
     """
-    Return a list of up to top N: (idx, score, last_date)
-    for a given part_key and date, 
-    excluding anyone in 'assigned_so_far'.
-    We'll sort by 'score' descending.
+    Return a list of up to 'top_n': (idx, score, last_date)
+     - part_key: which part name we store in df_history (e.g. "Tesoros", "EBC", or "Estudiante")
+     - assigned_so_far: set of names already assigned this date
+     - required_gender: "V" for man, "M" for woman, or None for no gender filter
+     - must_be_estudiante: if True, we only pick rows with Estudiante=YES
+    We'll sort by 'score' descending (score = weeks * <part_key>Mod).
     """
     candidates_idx = []
     for idx, person in df_people.iterrows():
+        # Must be active
         if str(person.get("Activo?", "NO")).upper() != "YES":
             continue
-        # Must have 'YES' in the <part_key> column
-        if str(person.get(part_key, "NO")).upper() != "YES":
+
+        name = person["Hermano"]
+
+        # If we require "Estudiante=YES"
+        if must_be_estudiante:
+            if str(person.get("Estudiante", "NO")).upper() != "YES":
+                continue
+
+        # If we require a certain gender
+        if required_gender is not None:
+            # user says "V" for men, "M" for women in column "Género"
+            gen = str(person.get("Género", "")).upper()
+            if gen != required_gender.upper():
+                continue
+
+        # If name is already assigned that day, skip
+        if name in assigned_so_far:
             continue
-        # Exclude if they're already assigned that day
-        hermano_name = person["Hermano"]
-        if hermano_name in assigned_so_far:
-            continue
+
+        # For normal columns (like "Tesoros=YES"), we check if the user can do that part
+        # But if part_key == "Estudiante", we rely on must_be_estudiante
+        # Or we might do: if user wants "Tesoros" column must be "YES"
+        # We'll handle that outside if needed.
+        if part_key not in ["Estudiante"]: 
+            # Then we expect e.g. "Tesoros" column in df_people
+            if str(person.get(part_key, "NO")).upper() != "YES":
+                continue
+        
         candidates_idx.append(idx)
     
     if not candidates_idx:
@@ -129,14 +162,14 @@ def get_top_candidates(df_people, df_history, part_key, meeting_date, assigned_s
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:top_n]
 
-def pick_candidate_interactively(top_candidates, df_people, part_label, date_str, assignment_text=""):
+def pick_candidate_interactively(top_candidates, df_people, part_label, date_str, assignment_text="", top_n=3):
     """
-    Show top 3 in console, with score & last assignment date.
-    Let user pick 1,2,3 or skip.
+    Show up to 'top_n' in console, with score & last assignment date.
+    Let user pick 1..top_n or skip.
     Return the chosen 'Hermano' name or None if skipped.
 
     top_candidates is a list of (idx, score, last_date).
-    assignment_text is the string for the meeting part, e.g. "1. Manténgase lejos..."
+    assignment_text is the string for the meeting part (like "3. Lectura de la Biblia" or SMM title).
     """
     if not top_candidates:
         print(f"\nNo eligible candidates for {part_label} on {date_str}. Skipping.")
@@ -150,6 +183,8 @@ def pick_candidate_interactively(top_candidates, df_people, part_label, date_str
         print(f"\n--- {part_label} on {date_str} ---")
 
     for i, (idx_cand, sc, ldate) in enumerate(top_candidates):
+        if i >= top_n:
+            break
         hermano = df_people.at[idx_cand, "Hermano"]
         # Format last date, or "None"
         if ldate > datetime(1900,1,1).date():
@@ -158,7 +193,7 @@ def pick_candidate_interactively(top_candidates, df_people, part_label, date_str
             last_str = "None"
         print(f"{i+1}) {hermano} (score={sc:.2f}, last={last_str})")
 
-    choice = input("Choose 1, 2, 3 or 'skip': ").strip().lower()
+    choice = input(f"Choose 1..{top_n} or 'skip': ").strip().lower()
     if choice == "skip":
         return None
 
@@ -187,14 +222,13 @@ def add_history(df_history, hermano_name, part_key, mtg_date):
     return df_history
 
 ###############################################################################
-#    LOGIC TO IDENTIFY TESOROS & PERLAS (rows 3..7), CAPTURE THE TEXT
+#                 OLD LOGIC: PRESIDENCIA, TESOROS, PERLAS, NVC, EBC
 ###############################################################################
 
 def identify_tesoros_perlas(weekly_df, row_idx, col):
     """
-    In rows [3..7], we look if it starts with "1." => "Tesoros"
-                       or "2." => "Perlas"
-    Return (part_key, assignment_text) or (None, None) if not recognized.
+    For Tesoros (1.) or Perlas (2.) in rows 3..7.
+    Return (part_key, assignment_text).
     """
     if row_idx not in weekly_df.index:
         return None, None
@@ -206,23 +240,19 @@ def identify_tesoros_perlas(weekly_df, row_idx, col):
 
     low = txt.lower()
     if low.startswith("1."):
-        return "Tesoros", txt  # keep original text
+        return "Tesoros", txt
     elif low.startswith("2."):
         return "Perlas", txt
     else:
         return None, None
 
-###############################################################################
-#     LOGIC TO IDENTIFY NVC, NECESIDADES, EBC (rows 13..17), CAPTURE TEXT
-###############################################################################
-
 def identify_nvc_type(weekly_df, row_idx, col):
     """
     For rows [13..17], read the cell:
-      - if includes "estudio bíblico de la congregación" => ("EBC", <full text>)
-      - if includes "necesidades de la congregación" => ("Necesidades", <text>)
-      - else => ("NVC", <text>) if not blank
-      - or (None, None) if blank
+      - if includes "estudio bíblico de la congregación" => ("EBC", text)
+      - if includes "necesidades de la congregación" => ("Necesidades", text)
+      - else => ("NVC", text) if not blank
+      - (None, None) if blank
     """
     if row_idx not in weekly_df.index:
         return None, None
@@ -243,6 +273,42 @@ def identify_nvc_type(weekly_df, row_idx, col):
         return "NVC", txt
 
 ###############################################################################
+# NEW LOGIC: LECTURA DE LA BIBLIA (row 6) & SEAMOS MEJORES MAESTROS (rows 8..11)
+###############################################################################
+
+def identify_lectura(weekly_df, row_idx, col):
+    """
+    If row_idx is 6, check if it starts with '3. Lectura de la Biblia'.
+    Return (True, assignment_text) if yes, else (False, None).
+    """
+    if row_idx not in weekly_df.index:
+        return False, None
+    val = weekly_df.at[row_idx, col]
+    if not isinstance(val, str):
+        val = str(val) if pd.notna(val) else ""
+    txt = val.strip()
+    low = txt.lower()
+    if low.startswith("3. lectura de la biblia"):
+        return True, txt
+    return False, None
+
+def identify_smm(weekly_df, row_idx, col):
+    """
+    If row_idx in [8..11], check if there's any text. 
+    If there's text, we treat it as an SMM assignment. Return that text.
+    If blank => (False, None).
+    """
+    if row_idx not in weekly_df.index:
+        return False, None
+    val = weekly_df.at[row_idx, col]
+    if not isinstance(val, str):
+        val = str(val) if pd.notna(val) else ""
+    txt = val.strip()
+    if len(txt) == 0:
+        return False, None
+    return True, txt  # there's text => SMM assignment
+
+###############################################################################
 #                          MAIN ASSIGNMENT LOGIC
 ###############################################################################
 
@@ -252,18 +318,32 @@ def main_assignment():
     weekly_df = load_weekly_programs("weekly_programs.xlsx")
     date_cols = get_date_columns(weekly_df)
 
-    # We'll output to a DataFrame with 6 final rows
-    final_rows = ["PRESIDENCIA", "TESOROS", "PERLAS", "NVC1", "NVC2", "EBC"]
+    # We'll output to a DataFrame with a set of final rows
+    final_rows = [
+        "PRESIDENCIA",
+        "TESOROS",
+        "PERLAS",
+        "LECTURA",   # row 6
+        "SMM1",      # row 8
+        "SMM2",      # row 9
+        "SMM3",      # row 10
+        "SMM4",      # row 11
+        "NVC1",
+        "NVC2",
+        "EBC"
+    ]
     df_final = pd.DataFrame(index=final_rows, columns=date_cols)
 
-    # Map these 6 row labels to columns in df_people
+    # part_mapping for normal parts
     part_mapping = {
-        "PRESIDENCIA": "Presidencias",
+        "PRESIDENCIA": "Presidencia",
         "TESOROS": "Tesoros",
         "PERLAS": "Perlas",
-        "NVC1": "NVC",        # or "Necesidades" if we detect that string
-        "NVC2": "NVC",        # same logic
+        "NVC1": "NVC",        
+        "NVC2": "NVC",
         "EBC": "EBC",
+        "LECTURA": "Estudiante", # (men only)
+        "SMMx": "Estudiante", # (men or women)
     }
 
     for col in date_cols:
@@ -271,13 +351,17 @@ def main_assignment():
         if not mtg_date:
             continue
 
-        # We'll track who is assigned on this date
-        assigned_today = set()
+        assigned_today = set()  # track who is assigned for this date
 
         #######################################################################
-        # 1) PRESIDENCIA (hard-coded every date)
+        # PRESIDENCIA
         #######################################################################
-        top3 = get_top_candidates(df_people, df_history, part_mapping["PRESIDENCIA"], mtg_date, assigned_today)
+        top3 = get_top_candidates(
+            df_people, df_history, 
+            part_mapping["PRESIDENCIA"], 
+            mtg_date, assigned_today,
+            top_n=3
+        )
         chosen = pick_candidate_interactively(top3, df_people, "PRESIDENCIA", col)
         if chosen:
             df_final.at["PRESIDENCIA", col] = chosen
@@ -285,27 +369,36 @@ def main_assignment():
             df_history = add_history(df_history, chosen, part_mapping["PRESIDENCIA"], mtg_date)
 
         #######################################################################
-        # 2) TESOROS & PERLAS (rows 3..7)
+        # TESOROS & PERLAS (rows 5..6)
         #######################################################################
-        # We'll look for "1." => Tesoros, "2." => Perlas
-        # If found, we capture the assignment text
+        # same old logic
         tesoros_found = False
         perlas_found = False
-
-        for r in range(3, 8):
+        for r in range(3, 5):
             part_key, assignment_text = identify_tesoros_perlas(weekly_df, r, col)
             if part_key == "Tesoros" and not tesoros_found:
-                top3 = get_top_candidates(df_people, df_history, "Tesoros", mtg_date, assigned_today)
-                chosen_t = pick_candidate_interactively(top3, df_people, "TESOROS", col, assignment_text)
+                top_candidates = get_top_candidates(
+                    df_people, df_history, 
+                    "Tesoros", 
+                    mtg_date, 
+                    assigned_today, 
+                    top_n=3
+                )
+                chosen_t = pick_candidate_interactively(top_candidates, df_people, "TESOROS", col, assignment_text)
                 if chosen_t:
                     df_final.at["TESOROS", col] = chosen_t
                     assigned_today.add(chosen_t)
                     df_history = add_history(df_history, chosen_t, "Tesoros", mtg_date)
                 tesoros_found = True
-
             elif part_key == "Perlas" and not perlas_found:
-                top3 = get_top_candidates(df_people, df_history, "Perlas", mtg_date, assigned_today)
-                chosen_p = pick_candidate_interactively(top3, df_people, "PERLAS", col, assignment_text)
+                top_candidates = get_top_candidates(
+                    df_people, df_history, 
+                    "Perlas", 
+                    mtg_date, 
+                    assigned_today, 
+                    top_n=3
+                )
+                chosen_p = pick_candidate_interactively(top_candidates, df_people, "PERLAS", col, assignment_text)
                 if chosen_p:
                     df_final.at["PERLAS", col] = chosen_p
                     assigned_today.add(chosen_p)
@@ -313,25 +406,97 @@ def main_assignment():
                 perlas_found = True
 
         #######################################################################
-        # 3) NVC / Necesidades / EBC (rows 13..17)
+        # LECTURA DE LA BIBLIA (row 7)
         #######################################################################
-        # We might find multiple lines. We'll store them in a list.
-        nvc_parts_info = []  # list of tuples (cat, text) e.g. ("EBC","8. Estudio..."), ("NVC","7. ...")
+        # must be men with Estudiante=YES, top 3
+        is_lectura, lectura_text = identify_lectura(weekly_df, 5, col)
+        if is_lectura:
+            # we use part_key="Estudiante"
+            # required_gender="V" => men
+            # must_be_estudiante=True
+            top7 = get_top_candidates(
+                df_people, df_history, 
+                part_key="Estudiante", 
+                meeting_date=mtg_date, 
+                assigned_so_far=assigned_today, 
+                top_n=7,
+                required_gender="V",
+                must_be_estudiante=True
+            )
+            chosen_lec = pick_candidate_interactively(top7, df_people, "LECTURA BIBLIA", col, lectura_text, top_n=7)
+            if chosen_lec:
+                df_final.at["LECTURA", col] = chosen_lec
+                assigned_today.add(chosen_lec)
+                # We'll store it in AssignmentHistory as "Estudiante" or "Lectura"
+                # If you want separate stats, use "Lectura". For simplicity, "Lectura".
+                df_history = add_history(df_history, chosen_lec, "Lectura", mtg_date)
 
-        for r in range(13, 16):
+        #######################################################################
+        # SEAMOS MEJORES MAESTROS (rows 9..12)
+        #######################################################################
+        # Each row might have text => we treat it as an SMM assignment
+        # We can fill SMM1..SMM4 in order
+        smm_index = 1
+        for r in range(7, 10):
+            if smm_index > 4:
+                break
+            has_smm, smm_text = identify_smm(weekly_df, r, col)
+            if has_smm:
+                # ask user: man (V), woman (M), or skip, unless it's "Discurso"
+                print(f"\n=== SMM Part row={r} on {col} ===")
+                print(f"Title: {smm_text}")
+                if "Discurso" in smm_text:
+                    choice = "v"  # always man for "Discurso"
+                else:
+                    choice = input("Assign to VARÓN (V), MUJER (M), or skip? [V/M/skip]: ").strip().lower()
+                if choice == "skip":
+                    pass  # do nothing
+                elif choice in ["v","m"]:
+                    required_gender = "V" if choice=="v" else "M"
+                    # must be Estudiante=YES
+                    top7 = get_top_candidates(
+                        df_people, 
+                        df_history, 
+                        part_key="Estudiante", 
+                        meeting_date=mtg_date, 
+                        assigned_so_far=assigned_today, 
+                        top_n=7,
+                        required_gender=required_gender,
+                        must_be_estudiante=True
+                    )
+                    smm_label = f"SMM{smm_index}"
+                    chosen_smm = pick_candidate_interactively(top7, df_people, smm_label, col, smm_text, top_n=7)
+                    if chosen_smm:
+                        df_final.at[smm_label, col] = chosen_smm
+                        assigned_today.add(chosen_smm)
+                        # store as "Estudiante" or "SMM" in history
+                        df_history = add_history(df_history, chosen_smm, "SMM", mtg_date)
+                # increment
+                smm_index += 1
+
+        #######################################################################
+        # NVC / Necesidades / EBC (rows 15..17)
+        #######################################################################
+        nvc_parts_info = []  
+        for r in range(13, 15):
             cat, txt = identify_nvc_type(weekly_df, r, col)
             if cat:
                 nvc_parts_info.append((cat, txt))
 
-        # Separate out EBC vs. the rest
         ebc_entries = [(c, t) for (c, t) in nvc_parts_info if c == "EBC"]
-        other_nvc_list = [(c, t) for (c, t) in nvc_parts_info if c != "EBC"]  # "NVC" or "Necesidades"
+        other_nvc_list = [(c, t) for (c, t) in nvc_parts_info if c != "EBC"]
 
         # NVC1
         if len(other_nvc_list) > 0:
             cat1, text1 = other_nvc_list[0]
             part_col_1 = "NVC" if cat1 == "NVC" else "Necesidades"
-            top3 = get_top_candidates(df_people, df_history, part_col_1, mtg_date, assigned_today)
+            top3 = get_top_candidates(
+                df_people, df_history, 
+                part_key=part_col_1, 
+                meeting_date=mtg_date, 
+                assigned_so_far=assigned_today, 
+                top_n=3
+            )
             chosen_1 = pick_candidate_interactively(top3, df_people, cat1.upper(), col, text1)
             if chosen_1:
                 df_final.at["NVC1", col] = chosen_1
@@ -342,27 +507,43 @@ def main_assignment():
         if len(other_nvc_list) > 1:
             cat2, text2 = other_nvc_list[1]
             part_col_2 = "NVC" if cat2 == "NVC" else "Necesidades"
-            top3 = get_top_candidates(df_people, df_history, part_col_2, mtg_date, assigned_today)
+            top3 = get_top_candidates(
+                df_people, df_history, 
+                part_key=part_col_2, 
+                meeting_date=mtg_date, 
+                assigned_so_far=assigned_today, 
+                top_n=3
+            )
             chosen_2 = pick_candidate_interactively(top3, df_people, cat2.upper(), col, text2)
             if chosen_2:
                 df_final.at["NVC2", col] = chosen_2
                 assigned_today.add(chosen_2)
                 df_history = add_history(df_history, chosen_2, part_col_2, mtg_date)
 
-        # EBC (take only 1 even if there's more than one line)
+        # EBC
         if len(ebc_entries) > 0:
             ebc_cat, ebc_text = ebc_entries[0]
-            top3 = get_top_candidates(df_people, df_history, "EBC", mtg_date, assigned_today)
+            top3 = get_top_candidates(
+                df_people, df_history, 
+                part_key="EBC", 
+                meeting_date=mtg_date, 
+                assigned_so_far=assigned_today, 
+                top_n=3
+            )
             chosen_ebc = pick_candidate_interactively(top3, df_people, "EBC", col, ebc_text)
             if chosen_ebc:
                 df_final.at["EBC", col] = chosen_ebc
                 assigned_today.add(chosen_ebc)
                 df_history = add_history(df_history, chosen_ebc, "EBC", mtg_date)
 
+        #######################################################################
+        # SAVE progress after finishing this date (column)
+        #######################################################################
+        save_people_data(df_people, df_history, "people_data.xlsx")
+        print(f"\nSaved partial progress after finishing assignments for {col}.")
+        
     # End of all columns
     df_final.to_excel("final_assignments.xlsx")
-
-    save_people_data(df_people, df_history, "people_data.xlsx")
 
     print("\nFinished all assignments!")
     print("Check 'final_assignments.xlsx' and 'people_data.xlsx' for results.")
