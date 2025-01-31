@@ -75,14 +75,14 @@ def get_date_columns(df):
 ###############################################################################
 
 def get_unified_smm_last_date(df_history, person_name):
-    all_rows = df_history[df_history["Name"]==person_name]
+    all_rows = df_history.loc[df_history["Name"]==person_name].copy()
     if all_rows.empty:
         return datetime(1900,1,1).date()
 
     def check_smm(p):
         return strip_sala_b_suffix(str(p)) in SMM_SUBPARTS
 
-    all_rows["isSMM"] = all_rows["Part"].apply(check_smm)
+    all_rows["isSMM"] = all_rows["Part"].apply(check_smm).copy()
     sub = all_rows[all_rows["isSMM"]==True]
     if sub.empty:
         return datetime(1900,1,1).date()
@@ -184,7 +184,7 @@ def get_top_candidates(df_people, df_history, part_key, meeting_date,
 ###############################################################################
 
 def get_recent_smm_assignments(df_history, person_name, how_many=3):
-    allr = df_history[df_history["Name"]==person_name]
+    allr = df_history.loc[df_history["Name"]==person_name].copy()
     if allr.empty:
         return []
     def is_smm(x):
@@ -409,12 +409,12 @@ def main_assignment():
         if is_lec:
             cand_lec = get_top_candidates(df_people, df_history,
                                           "Lectura", mtg_date,
-                                          assigned_today, top_n=7,
+                                          assigned_today, top_n=3,
                                           required_gender="V")
             chosen_lec = pick_candidate_interactively(cand_lec, df_people, df_history,
                                                       "Lectura","LECTURA", col,
                                                       assignment_text=lect_text,
-                                                      top_n=7)
+                                                      top_n=3)
             if chosen_lec:
                 df_final.at["LECTURA", col] = chosen_lec
                 assigned_today.add(chosen_lec)
@@ -482,12 +482,12 @@ def main_assignment():
 
                 cand_smm = get_top_candidates(df_people, df_history, subpart,
                                               mtg_date, assigned_today,
-                                              top_n=7, required_gender=required_g)
+                                              top_n=5, required_gender=required_g)
                 label_smm = f"SMM{smm_index}"
                 chosen_smm = pick_candidate_interactively(cand_smm, df_people, df_history,
                                                           subpart, label_smm,
                                                           col, assignment_text=smm_text,
-                                                          top_n=7)
+                                                          top_n=5)
                 if chosen_smm:
                     df_final.at[label_smm, col] = chosen_smm
                     assigned_today.add(chosen_smm)
@@ -581,11 +581,11 @@ def main_assignment():
                 cand_le_sb = get_top_candidates(df_people, df_history,
                                                 "Lectura Sala B",
                                                 mtg_date, assigned_today,
-                                                top_n=7, required_gender="V")
+                                                top_n=3, required_gender="V")
                 chosen_le_sb = pick_candidate_interactively(cand_le_sb, df_people, df_history,
                                                             "Lectura Sala B","LECTURA Sala B",
                                                             col, assignment_text=lect_text,
-                                                            top_n=7)
+                                                            top_n=3)
                 if chosen_le_sb:
                     df_final.at["LECTURA Sala B", col] = chosen_le_sb
                     assigned_today.add(chosen_le_sb)
@@ -648,12 +648,12 @@ def main_assignment():
                 # now get top candidates
                 label_smm_b = f"SMM{i_sb} Sala B"
                 cand_smm_b = get_top_candidates(df_people, df_history, subpart_b,
-                                                mtg_date, assigned_today, top_n=7,
+                                                mtg_date, assigned_today, top_n=5,
                                                 required_gender=required_b)
                 chosen_smm_b = pick_candidate_interactively(cand_smm_b, df_people, df_history,
                                                             subpart_b, label_smm_b, col,
                                                             assignment_text=text_main,
-                                                            top_n=7)
+                                                            top_n=5)
                 if chosen_smm_b:
                     df_final.at[label_smm_b, col] = chosen_smm_b
                     assigned_today.add(chosen_smm_b)
