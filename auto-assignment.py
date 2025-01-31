@@ -572,7 +572,12 @@ def main_assignment():
             df_history = add_history(df_history, chosen_or, "Oraciones", mtg_date)
 
         #--- 8) SALA B prompt
-        sala_b_ans = input("\nIs there SALA B for this week? [Y/N]: ").strip().lower()
+        while True:
+            sala_b_ans = input("\nIs there SALA B for this week? [Y/N]: ").strip().lower()
+            if sala_b_ans in ["y","n"]:
+                break
+            print("Invalid input. Type 'Y' or 'N'.")
+
         if sala_b_ans=="y":
             # replicate LECTURA Sala B if LECTURA in main was assigned
             if is_lec:
