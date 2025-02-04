@@ -326,7 +326,6 @@ def identify_smm(weekly_df, row_idx, col):
         return False,None
     return True, txt
 
-
 ###############################################################################
 # MAIN ASSIGNMENT
 ###############################################################################
@@ -336,6 +335,7 @@ def main_assignment():
     weekly_df = load_weekly_programs("weekly_programs.xlsx")
     date_cols = get_date_columns(weekly_df)
 
+    # Added "SALA B" row for overall assignment.
     final_rows = [
         "PRESIDENCIA",
         "TESOROS",
@@ -354,7 +354,8 @@ def main_assignment():
         "SMM1 Sala B",
         "SMM2 Sala B",
         "SMM3 Sala B",
-        "SMM4 Sala B"
+        "SMM4 Sala B",
+        "SALA B"    # New row for overall SALA B assignment
     ]
     df_final = pd.DataFrame(index=final_rows, columns=date_cols)
 
@@ -581,8 +582,7 @@ def main_assignment():
         if sala_b_ans=="y":
             # replicate LECTURA Sala B if LECTURA in main was assigned
             if is_lec:
-                # same text
-                # men only
+                # same text, men only
                 cand_le_sb = get_top_candidates(df_people, df_history,
                                                 "Lectura Sala B",
                                                 mtg_date, assigned_today,
@@ -650,7 +650,7 @@ def main_assignment():
                     if ans in ["v","m"]:
                         required_b=ans.upper()
 
-                # now get top candidates
+                # now get top candidates for the replicated SMM Sala B
                 label_smm_b = f"SMM{i_sb} Sala B"
                 cand_smm_b = get_top_candidates(df_people, df_history, subpart_b,
                                                 mtg_date, assigned_today, top_n=5,
@@ -664,6 +664,20 @@ def main_assignment():
                     assigned_today.add(chosen_smm_b)
                     df_history = add_history(df_history, chosen_smm_b, subpart_b, mtg_date)
 
+            # --- Additional overall SALA B assignment ---
+            print(f"\n=== Overall SALA B Assignment on {col} ===")
+            # Use "Sala B" as the part key so that get_top_candidates looks in the people_data column "Sala B"
+            cand_sala_b = get_top_candidates(df_people, df_history, "Sala B", mtg_date, assigned_today, top_n=3)
+            chosen_sala_b = pick_candidate_interactively(
+                cand_sala_b, df_people, df_history,
+                "Sala B", "SALA B", col,
+                assignment_text="Overall SALA B Assignment", top_n=3
+            )
+            if chosen_sala_b:
+                df_final.at["SALA B", col] = chosen_sala_b
+                assigned_today.add(chosen_sala_b)
+                df_history = add_history(df_history, chosen_sala_b, "Sala B", mtg_date)
+
         # save partial progress for this date
         save_people_data(df_people, df_history, "people_data.xlsx")
         print(f"\nSaved partial progress after finishing assignments for {col}.")
@@ -671,7 +685,6 @@ def main_assignment():
     # end of columns
     df_final.to_excel("final_assignments.xlsx")
     print("\nAll done! Check 'final_assignments.xlsx' & 'people_data.xlsx' for final results.")
-
 
 ###############################################################################
 # ENTRY POINT
