@@ -51,7 +51,7 @@ def load_people_data(filename="people_data.xlsx"):
     if "AssignmentHistory" in xls.sheet_names:
         df_history = pd.read_excel(xls, sheet_name="AssignmentHistory")
     else:
-        df_history = pd.DataFrame(columns=["Name","Part","AssignmentDate"])
+        df_history = pd.DataFrame(columns=["Name", "Part", "AssignmentDate"])
     return df_people, df_history
 
 def save_people_data(df_people, df_history, filename="people_data.xlsx"):
@@ -63,7 +63,7 @@ def load_weekly_programs(filename="weekly_programs.xlsx"):
     return pd.read_excel(filename)
 
 def get_date_columns(df):
-    date_cols=[]
+    date_cols = []
     for col in df.columns:
         dt = parse_date_str(col)
         if dt:
@@ -75,20 +75,22 @@ def get_date_columns(df):
 ###############################################################################
 
 def get_unified_smm_last_date(df_history, person_name):
-    all_rows = df_history.loc[df_history["Name"]==person_name].copy()
+    all_rows = df_history.loc[df_history["Name"] == person_name].copy()
     if all_rows.empty:
-        return datetime(1900,1,1).date()
+        return datetime(1900, 1, 1).date()
 
     def check_smm(p):
         return strip_sala_b_suffix(str(p)) in SMM_SUBPARTS
 
-    all_rows["isSMM"] = all_rows["Part"].apply(check_smm).copy()
-    sub = all_rows[all_rows["isSMM"]==True]
+    all_rows["isSMM"] = all_rows["Part"].apply(check_smm)
+    sub = all_rows.loc[all_rows["isSMM"] == True].copy()
     if sub.empty:
-        return datetime(1900,1,1).date()
-    sub = sub.sort_values("AssignmentDate", ascending=False)
-    parsed = parse_date_str(sub["AssignmentDate"].iloc[0])
-    return parsed if parsed else datetime(1900,1,1).date()
+        return datetime(1900, 1, 1).date()
+    # Convert dates for proper sorting
+    sub["ParsedDate"] = sub["AssignmentDate"].apply(parse_date_str)
+    sub = sub.sort_values("ParsedDate", ascending=False)
+    parsed = sub["ParsedDate"].iloc[0]
+    return parsed if parsed else datetime(1900, 1, 1).date()
 
 def weeks_since_assignment(last_date, current_date):
     return (current_date - last_date).days / 7.0
@@ -97,30 +99,29 @@ def get_last_assignment_date(df_history, person_name, part_key):
     base = strip_sala_b_suffix(part_key)
     if base in SMM_SUBPARTS:
         return get_unified_smm_last_date(df_history, person_name)
-    if base=="Lectura":
-        # unify "Lectura" + "Lectura Sala B"
-        sub = df_history[df_history["Name"]==person_name].copy()
+    if base == "Lectura":
+        # Unify "Lectura" + "Lectura Sala B"
+        sub = df_history[df_history["Name"] == person_name].copy()
         if sub.empty:
-            return datetime(1900,1,1).date()
+            return datetime(1900, 1, 1).date()
         def isLect(p):
-            return strip_sala_b_suffix(str(p))=="Lectura"
+            return strip_sala_b_suffix(str(p)) == "Lectura"
         sub["isLect"] = sub["Part"].apply(isLect)
-        sub = sub[sub["isLect"]==True]
+        sub = sub.loc[sub["isLect"] == True].copy()
         if sub.empty:
-            return datetime(1900,1,1).date()
-        sub = sub.sort_values("AssignmentDate", ascending=False)
-        parsed = parse_date_str(sub["AssignmentDate"].iloc[0])
-        return parsed if parsed else datetime(1900,1,1).date()
+            return datetime(1900, 1, 1).date()
+        sub["ParsedDate"] = sub["AssignmentDate"].apply(parse_date_str)
+        sub = sub.sort_values("ParsedDate", ascending=False)
+        parsed = sub["ParsedDate"].iloc[0]
+        return parsed if parsed else datetime(1900, 1, 1).date()
     # else direct match
-    sub = df_history[
-        (df_history["Name"]==person_name) &
-        (df_history["Part"]==part_key)
-    ]
+    sub = df_history[(df_history["Name"] == person_name) & (df_history["Part"] == part_key)].copy()
     if sub.empty:
-        return datetime(1900,1,1).date()
-    sub = sub.sort_values("AssignmentDate", ascending=False)
-    parsed = parse_date_str(sub["AssignmentDate"].iloc[0])
-    return parsed if parsed else datetime(1900,1,1).date()
+        return datetime(1900, 1, 1).date()
+    sub["ParsedDate"] = sub["AssignmentDate"].apply(parse_date_str)
+    sub = sub.sort_values("ParsedDate", ascending=False)
+    parsed = sub["ParsedDate"].iloc[0]
+    return parsed if parsed else datetime(1900, 1, 1).date()
 
 ###############################################################################
 # MAPPING to 'Estudiante'
@@ -137,7 +138,7 @@ def get_people_column_for_part(part_key):
 ###############################################################################
 
 def compute_score_and_lastdate(df_people, df_history, idx, part_key, meeting_date):
-    name = df_people.at[idx,"Hermano"]
+    name = df_people.at[idx, "Hermano"]
     last_date = get_last_assignment_date(df_history, name, part_key)
     wks = weeks_since_assignment(last_date, meeting_date)
     col_name = get_people_column_for_part(part_key)
@@ -153,30 +154,30 @@ def compute_score_and_lastdate(df_people, df_history, idx, part_key, meeting_dat
 def get_top_candidates(df_people, df_history, part_key, meeting_date,
                        assigned_so_far, top_n=3, required_gender=None):
     col_name = get_people_column_for_part(part_key)
-    valid_idx=[]
+    valid_idx = []
     for idx, row in df_people.iterrows():
-        if str(row.get("Activo?", "NO")).upper()!="YES":
+        if str(row.get("Activo?", "NO")).upper() != "YES":
             continue
         name = row["Hermano"]
         if name in assigned_so_far:
             continue
         if required_gender:
-            gen = str(row.get("Género","")).upper()
-            if gen!=required_gender.upper():
+            gen = str(row.get("Género", "")).upper()
+            if gen != required_gender.upper():
                 continue
-        if str(row.get(col_name,"NO")).upper()!="YES":
+        if str(row.get(col_name, "NO")).upper() != "YES":
             continue
         valid_idx.append(idx)
 
     if not valid_idx:
         return []
 
-    scored=[]
+    scored = []
     for cidx in valid_idx:
         sc, ldate = compute_score_and_lastdate(df_people, df_history, cidx, part_key, meeting_date)
         scored.append((cidx, sc, ldate))
 
-    scored.sort(key=lambda x:x[1], reverse=True)
+    scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:top_n]
 
 ###############################################################################
@@ -184,17 +185,18 @@ def get_top_candidates(df_people, df_history, part_key, meeting_date,
 ###############################################################################
 
 def get_recent_smm_assignments(df_history, person_name, how_many=3):
-    allr = df_history.loc[df_history["Name"]==person_name].copy()
+    allr = df_history.loc[df_history["Name"] == person_name].copy()
     if allr.empty:
         return []
     def is_smm(x):
         return strip_sala_b_suffix(str(x)) in SMM_SUBPARTS
     allr["isSMM"] = allr["Part"].apply(is_smm)
-    sub = allr[allr["isSMM"]==True]
+    sub = allr.loc[allr["isSMM"] == True].copy()
     if sub.empty:
         return []
-    sub = sub.sort_values("AssignmentDate", ascending=False)
-    out=[]
+    sub["ParsedDate"] = sub["AssignmentDate"].apply(parse_date_str)
+    sub = sub.sort_values("ParsedDate", ascending=False)
+    out = []
     for _, row in sub.head(how_many).iterrows():
         dt_str = "None"
         dt_ = parse_date_str(row["AssignmentDate"])
@@ -219,8 +221,8 @@ def pick_candidate_interactively(top_candidates, df_people, df_history,
     max_count = min(top_n, len(top_candidates))
     for i in range(max_count):
         cidx, sc, ldate = top_candidates[i]
-        hermano = df_people.at[cidx,"Hermano"]
-        last_str = "None" if ldate.year<1901 else ldate.strftime("%d/%m/%Y")
+        hermano = df_people.at[cidx, "Hermano"]
+        last_str = "None" if ldate.year < 1901 else ldate.strftime("%d/%m/%Y")
         info_line = f"{i+1}) {hermano} (score={sc:.2f}, last={last_str})"
 
         # if base in SMM_SUBPARTS => show 3 last SMM
@@ -232,17 +234,17 @@ def pick_candidate_interactively(top_candidates, df_people, df_history,
         print(info_line)
 
     while True:
-        choice = input(f"Choose 1..{max_count} or 'skip': ").strip().lower()
-        if choice=="skip":
+        choice = input(f"Choose 1..{max_count} or 's': ").strip().lower()
+        if choice == "s":
             return None
         try:
-            cnum=int(choice)
-            if 1<=cnum<=max_count:
-                chosen_idx= top_candidates[cnum-1][0]
-                return df_people.at[chosen_idx,"Hermano"]
+            cnum = int(choice)
+            if 1 <= cnum <= max_count:
+                chosen_idx = top_candidates[cnum - 1][0]
+                return df_people.at[chosen_idx, "Hermano"]
         except:
             pass
-        print(f"Invalid input! Type a number from 1..{max_count} or 'skip'.")
+        print(f"Invalid input! Type a number from 1..{max_count} or 's'.")
 
 ###############################################################################
 # add_history
@@ -264,12 +266,12 @@ def add_history(df_history, hermano_name, part_key, mtg_date):
 
 def ask_gender_or_skip():
     while True:
-        ans = input("Assign to Varón (V), Mujer (M), or skip? [V/M/skip]: ").strip().lower()
-        if ans in ["v","m"]:
+        ans = input("Assign to Varón (V), Mujer (M), or skip? [V/M/s]: ").strip().lower()
+        if ans in ["v", "m"]:
             return ans.upper()
-        if ans in ["skip",""]:
-            return "skip"
-        print("Invalid input. Type 'V','M','skip' or Enter for skip.")
+        if ans in ["s", ""]:
+            return "s"
+        print("Invalid input. Type 'V','M','s' or Enter for skip.")
 
 ###############################################################################
 # Identify Tesoros/Perlas, NVC, Lectura, SMM
@@ -277,26 +279,26 @@ def ask_gender_or_skip():
 
 def identify_tesoros_perlas(weekly_df, row_idx, col):
     if row_idx not in weekly_df.index:
-        return None,None
-    val= weekly_df.at[row_idx,col]
-    if not isinstance(val,str):
-        val= str(val) if pd.notna(val) else ""
-    txt= val.strip().lower()
+        return None, None
+    val = weekly_df.at[row_idx, col]
+    if not isinstance(val, str):
+        val = str(val) if pd.notna(val) else ""
+    txt = val.strip().lower()
     if txt.startswith("1."):
         return "Tesoros", val
     elif txt.startswith("2."):
         return "Perlas", val
-    return None,None
+    return None, None
 
 def identify_nvc_type(weekly_df, row_idx, col):
     if row_idx not in weekly_df.index:
-        return None,None
-    val= weekly_df.at[row_idx,col]
-    if not isinstance(val,str):
-        val= str(val) if pd.notna(val) else ""
-    txt= val.strip().lower()
-    if len(txt)==0:
-        return None,None
+        return None, None
+    val = weekly_df.at[row_idx, col]
+    if not isinstance(val, str):
+        val = str(val) if pd.notna(val) else ""
+    txt = val.strip().lower()
+    if len(txt) == 0:
+        return None, None
     elif "estudio bíblico de la congregación" in txt:
         return "EBC", val
     elif "necesidades de la congregación" in txt:
@@ -306,24 +308,24 @@ def identify_nvc_type(weekly_df, row_idx, col):
 
 def identify_lectura(weekly_df, row_idx, col):
     if row_idx not in weekly_df.index:
-        return False,None
-    val= weekly_df.at[row_idx,col]
-    if not isinstance(val,str):
-        val= str(val) if pd.notna(val) else ""
-    txt= val.strip().lower()
+        return False, None
+    val = weekly_df.at[row_idx, col]
+    if not isinstance(val, str):
+        val = str(val) if pd.notna(val) else ""
+    txt = val.strip().lower()
     if txt.startswith("3. lectura de la biblia"):
-        return True,val
-    return False,None
+        return True, val
+    return False, None
 
 def identify_smm(weekly_df, row_idx, col):
     if row_idx not in weekly_df.index:
-        return False,None
-    val= weekly_df.at[row_idx,col]
-    if not isinstance(val,str):
-        val=str(val) if pd.notna(val) else ""
-    txt= val.strip()
-    if len(txt)==0:
-        return False,None
+        return False, None
+    val = weekly_df.at[row_idx, col]
+    if not isinstance(val, str):
+        val = str(val) if pd.notna(val) else ""
+    txt = val.strip()
+    if len(txt) == 0:
+        return False, None
     return True, txt
 
 ###############################################################################
@@ -370,7 +372,7 @@ def main_assignment():
         cand_pres = get_top_candidates(df_people, df_history, "Presidencia",
                                        mtg_date, assigned_today, top_n=3)
         chosen_pres = pick_candidate_interactively(cand_pres, df_people, df_history,
-                                                   "Presidencia","PRESIDENCIA",
+                                                   "Presidencia", "PRESIDENCIA",
                                                    col)
         if chosen_pres:
             df_final.at["PRESIDENCIA", col] = chosen_pres
@@ -378,108 +380,108 @@ def main_assignment():
             df_history = add_history(df_history, chosen_pres, "Presidencia", mtg_date)
 
         #--- 2) TESOROS & PERLAS (rows 3..4)
-        tesoros_found=False
-        perlas_found=False
-        for r in range(3,5):
+        tesoros_found = False
+        perlas_found = False
+        for r in range(3, 5):
             part_key, text_val = identify_tesoros_perlas(weekly_df, r, col)
-            if part_key=="Tesoros" and not tesoros_found:
+            if part_key == "Tesoros" and not tesoros_found:
                 cand_t = get_top_candidates(df_people, df_history,
                                             "Tesoros", mtg_date, assigned_today, top_n=3)
                 chosen_t = pick_candidate_interactively(cand_t, df_people, df_history,
-                                                        "Tesoros","TESOROS", col,
+                                                        "Tesoros", "TESOROS", col,
                                                         assignment_text=text_val)
                 if chosen_t:
                     df_final.at["TESOROS", col] = chosen_t
                     assigned_today.add(chosen_t)
                     df_history = add_history(df_history, chosen_t, "Tesoros", mtg_date)
-                tesoros_found=True
-            elif part_key=="Perlas" and not perlas_found:
+                tesoros_found = True
+            elif part_key == "Perlas" and not perlas_found:
                 cand_p = get_top_candidates(df_people, df_history,
                                             "Perlas", mtg_date, assigned_today, top_n=3)
                 chosen_p = pick_candidate_interactively(cand_p, df_people, df_history,
-                                                        "Perlas","PERLAS", col,
+                                                        "Perlas", "PERLAS", col,
                                                         assignment_text=text_val)
                 if chosen_p:
                     df_final.at["PERLAS", col] = chosen_p
                     assigned_today.add(chosen_p)
                     df_history = add_history(df_history, chosen_p, "Perlas", mtg_date)
-                perlas_found=True
+                perlas_found = True
 
         #--- 3) LECTURA => men only
         is_lec, lect_text = identify_lectura(weekly_df, 5, col)
         if is_lec:
             cand_lec = get_top_candidates(df_people, df_history,
                                           "Lectura", mtg_date,
-                                          assigned_today, top_n=3,
+                                          assigned_today, top_n=5,
                                           required_gender="V")
             chosen_lec = pick_candidate_interactively(cand_lec, df_people, df_history,
-                                                      "Lectura","LECTURA", col,
+                                                      "Lectura", "LECTURA", col,
                                                       assignment_text=lect_text,
-                                                      top_n=3)
+                                                      top_n=5)
             if chosen_lec:
                 df_final.at["LECTURA", col] = chosen_lec
                 assigned_today.add(chosen_lec)
                 df_history = add_history(df_history, chosen_lec, "Lectura", mtg_date)
 
-        #--- 4) SMM => rows 7..9
-        smm_index=1
-        smm_texts_main = [None,None,None,None]  # store each row's text for replication
-        for r_smm in range(7,10):
-            if smm_index>4:
+        #--- 4) SMM => rows 7..10 (changed to include 4 rows)
+        smm_index = 1
+        smm_texts_main = [None, None, None, None]  # store each row's text for replication
+        for r_smm in range(7, 11):
+            if smm_index > 4:
                 break
             has_smm, smm_text = identify_smm(weekly_df, r_smm, col)
-            smm_texts_main[smm_index-1] = smm_text if has_smm else None
+            smm_texts_main[smm_index - 1] = smm_text if has_smm else None
 
             if has_smm:
                 print(f"\n=== SMM Part row={r_smm} on {col} ===")
                 print(f"Title: {smm_text}")
 
                 subpart = None
-                required_g=None
+                required_g = None
                 low_smm = smm_text.lower()
                 if "discurso" in low_smm:
-                    subpart="Discurso"
-                    required_g="V"
+                    subpart = "Discurso"
+                    required_g = "V"
                 elif "revisitas" in low_smm:
-                    subpart="Haga Revisitas"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
-                        smm_index+=1
+                    subpart = "Haga Revisitas"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
+                        smm_index += 1
                         continue
-                    if ans in ["V","M"]:
-                        required_g=ans
+                    if ans in ["V", "M"]:
+                        required_g = ans
                 elif "empiece conversaciones" in low_smm:
-                    subpart="Empiece conversaciones"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
-                        smm_index+=1
+                    subpart = "Empiece conversaciones"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
+                        smm_index += 1
                         continue
-                    if ans in ["V","M"]:
-                        required_g=ans
+                    if ans in ["V", "M"]:
+                        required_g = ans
                 elif "haga discípulos" in low_smm:
-                    subpart="Haga discípulos"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
-                        smm_index+=1
+                    subpart = "Haga discípulos"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
+                        smm_index += 1
                         continue
-                    if ans in ["V","M"]:
-                        required_g=ans
+                    if ans in ["V", "M"]:
+                        required_g = ans
                 elif "explique sus creencias" in low_smm:
-                    subpart="Explique sus creencias"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
-                        smm_index+=1
+                    subpart = "Explique sus creencias"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
+                        smm_index += 1
                         continue
-                    if ans in ["V","M"]:
-                        required_g=ans
+                    if ans in ["V", "M"]:
+                        required_g = ans
                 else:
-                    subpart="Estudiante"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
-                        smm_index+=1
+                    subpart = "Estudiante"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
+                        smm_index += 1
                         continue
-                    if ans in ["v","m"]:
-                        required_g=ans.upper()
+                    if ans in ["v", "m"]:
+                        required_g = ans.upper()
 
                 cand_smm = get_top_candidates(df_people, df_history, subpart,
                                               mtg_date, assigned_today,
@@ -494,26 +496,26 @@ def main_assignment():
                     assigned_today.add(chosen_smm)
                     df_history = add_history(df_history, chosen_smm, subpart, mtg_date)
 
-            smm_index+=1
+            smm_index += 1
 
         #--- 5) NVC / Necesidades / EBC => rows=13..15
-        nvc_parts=[]
-        for rr in range(13,16):
+        nvc_parts = []
+        for rr in range(13, 16):
             cat, txt = identify_nvc_type(weekly_df, rr, col)
             if cat:
                 nvc_parts.append((cat, txt))
 
-        ebc_ent = [(c,t) for (c,t) in nvc_parts if c=="EBC"]
-        other_nvc= [(c,t) for (c,t) in nvc_parts if c!="EBC"]
+        ebc_ent = [(c, t) for (c, t) in nvc_parts if c == "EBC"]
+        other_nvc = [(c, t) for (c, t) in nvc_parts if c != "EBC"]
 
         # NVC1
-        if len(other_nvc)>0:
-            cat1, txt1= other_nvc[0]
-            part1 = "NVC" if cat1=="NVC" else "Necesidades"
+        if len(other_nvc) > 0:
+            cat1, txt1 = other_nvc[0]
+            part1 = "NVC" if cat1 == "NVC" else "Necesidades"
             cand_n1 = get_top_candidates(df_people, df_history, part1,
                                          mtg_date, assigned_today, top_n=3)
             chosen_1 = pick_candidate_interactively(cand_n1, df_people, df_history,
-                                                    part1,"NVC1", col,
+                                                    part1, "NVC1", col,
                                                     assignment_text=txt1,
                                                     top_n=3)
             if chosen_1:
@@ -522,13 +524,13 @@ def main_assignment():
                 df_history = add_history(df_history, chosen_1, part1, mtg_date)
 
         # NVC2
-        if len(other_nvc)>1:
+        if len(other_nvc) > 1:
             cat2, txt2 = other_nvc[1]
-            part2= "NVC" if cat2=="NVC" else "Necesidades"
+            part2 = "NVC" if cat2 == "NVC" else "Necesidades"
             cand_n2 = get_top_candidates(df_people, df_history, part2,
                                          mtg_date, assigned_today, top_n=3)
             chosen_2 = pick_candidate_interactively(cand_n2, df_people, df_history,
-                                                    part2,"NVC2", col,
+                                                    part2, "NVC2", col,
                                                     assignment_text=txt2,
                                                     top_n=3)
             if chosen_2:
@@ -537,12 +539,12 @@ def main_assignment():
                 df_history = add_history(df_history, chosen_2, part2, mtg_date)
 
         # EBC
-        if len(ebc_ent)>0:
+        if len(ebc_ent) > 0:
             ebc_cat, ebc_txt = ebc_ent[0]
             cand_ebc = get_top_candidates(df_people, df_history, "EBC",
                                           mtg_date, assigned_today, top_n=3)
             chosen_ebc = pick_candidate_interactively(cand_ebc, df_people, df_history,
-                                                      "EBC","EBC", col,
+                                                      "EBC", "EBC", col,
                                                       assignment_text=ebc_txt,
                                                       top_n=3)
             if chosen_ebc:
@@ -554,7 +556,7 @@ def main_assignment():
         cand_le = get_top_candidates(df_people, df_history, "Lector EBC",
                                      mtg_date, assigned_today, top_n=3)
         chosen_le = pick_candidate_interactively(cand_le, df_people, df_history,
-                                                 "Lector EBC","LECTOR EBC", col,
+                                                 "Lector EBC", "LECTOR EBC", col,
                                                  top_n=3)
         if chosen_le:
             df_final.at["LECTOR EBC", col] = chosen_le
@@ -565,7 +567,7 @@ def main_assignment():
         cand_or = get_top_candidates(df_people, df_history, "Oraciones",
                                      mtg_date, assigned_today, top_n=3)
         chosen_or = pick_candidate_interactively(cand_or, df_people, df_history,
-                                                 "Oraciones","ORACION", col,
+                                                 "Oraciones", "ORACION", col,
                                                  top_n=3)
         if chosen_or:
             df_final.at["ORACION", col] = chosen_or
@@ -575,11 +577,11 @@ def main_assignment():
         #--- 8) SALA B prompt
         while True:
             sala_b_ans = input("\nIs there SALA B for this week? [Y/N]: ").strip().lower()
-            if sala_b_ans in ["y","n"]:
+            if sala_b_ans in ["y", "n"]:
                 break
             print("Invalid input. Type 'Y' or 'N'.")
 
-        if sala_b_ans=="y":
+        if sala_b_ans == "y":
             # replicate LECTURA Sala B if LECTURA in main was assigned
             if is_lec:
                 # same text, men only
@@ -588,7 +590,7 @@ def main_assignment():
                                                 mtg_date, assigned_today,
                                                 top_n=3, required_gender="V")
                 chosen_le_sb = pick_candidate_interactively(cand_le_sb, df_people, df_history,
-                                                            "Lectura Sala B","LECTURA Sala B",
+                                                            "Lectura Sala B", "LECTURA Sala B",
                                                             col, assignment_text=lect_text,
                                                             top_n=3)
                 if chosen_le_sb:
@@ -598,9 +600,9 @@ def main_assignment():
 
             # replicate SMM1..SMM4 from main
             # smm_texts_main array => replicate in SALA B
-            for i_sb in range(1,5):
+            for i_sb in range(1, 5):
                 label_main = f"SMM{i_sb}"
-                text_main = smm_texts_main[i_sb-1]  # might be None
+                text_main = smm_texts_main[i_sb - 1]  # might be None
                 if not text_main:
                     # no assignment in main => skip
                     continue
@@ -608,47 +610,47 @@ def main_assignment():
                 print(f"\n=== {label_main} Sala B on {col} ===")
                 print(f"Title: {text_main}")
                 low_sb = text_main.lower()
-                subpart_b=None
-                required_b=None
+                subpart_b = None
+                required_b = None
 
                 if "discurso" in low_sb:
-                    subpart_b="Discurso Sala B"
-                    required_b="V"
+                    subpart_b = "Discurso Sala B"
+                    required_b = "V"
                 elif "revisitas" in low_sb:
-                    subpart_b="Haga Revisitas Sala B"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
+                    subpart_b = "Haga Revisitas Sala B"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
                         continue
-                    if ans in ["V","M"]:
-                        required_b=ans
+                    if ans in ["V", "M"]:
+                        required_b = ans
                 elif "empiece conversaciones" in low_sb:
-                    subpart_b="Empiece conversaciones Sala B"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
+                    subpart_b = "Empiece conversaciones Sala B"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
                         continue
-                    if ans in ["V","M"]:
-                        required_b=ans
+                    if ans in ["V", "M"]:
+                        required_b = ans
                 elif "haga discípulos" in low_sb:
-                    subpart_b="Haga discípulos Sala B"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
+                    subpart_b = "Haga discípulos Sala B"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
                         continue
-                    if ans in ["V","M"]:
-                        required_b=ans
+                    if ans in ["V", "M"]:
+                        required_b = ans
                 elif "explique sus creencias" in low_sb:
-                    subpart_b="Explique sus creencias Sala B"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
+                    subpart_b = "Explique sus creencias Sala B"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
                         continue
-                    if ans in ["V","M"]:
-                        required_b=ans
+                    if ans in ["V", "M"]:
+                        required_b = ans
                 else:
-                    subpart_b="Estudiante Sala B"
-                    ans=ask_gender_or_skip()
-                    if ans=="skip":
+                    subpart_b = "Estudiante Sala B"
+                    ans = ask_gender_or_skip()
+                    if ans == "s":
                         continue
-                    if ans in ["v","m"]:
-                        required_b=ans.upper()
+                    if ans in ["v", "m"]:
+                        required_b = ans.upper()
 
                 # now get top candidates for the replicated SMM Sala B
                 label_smm_b = f"SMM{i_sb} Sala B"
