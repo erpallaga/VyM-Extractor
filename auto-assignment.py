@@ -152,7 +152,7 @@ def compute_score_and_lastdate(df_people, df_history, idx, part_key, meeting_dat
 ###############################################################################
 
 def get_top_candidates(df_people, df_history, part_key, meeting_date,
-                       assigned_so_far, top_n=3, required_gender=None):
+                       assigned_so_far, top_n=5, required_gender=None):
     col_name = get_people_column_for_part(part_key)
     valid_idx = []
     for idx, row in df_people.iterrows():
@@ -207,7 +207,7 @@ def get_recent_smm_assignments(df_history, person_name, how_many=3):
 
 def pick_candidate_interactively(top_candidates, df_people, df_history,
                                  part_key, part_label, date_str,
-                                 assignment_text="", top_n=3):
+                                 assignment_text="", top_n=5):
     if not top_candidates:
         print(f"\nNo eligible candidates for {part_label} on {date_str}. Skipping.")
         return None
@@ -370,7 +370,7 @@ def main_assignment():
 
         #--- 1) PRESIDENCIA
         cand_pres = get_top_candidates(df_people, df_history, "Presidencia",
-                                       mtg_date, assigned_today, top_n=3)
+                                       mtg_date, assigned_today, top_n=5)
         chosen_pres = pick_candidate_interactively(cand_pres, df_people, df_history,
                                                    "Presidencia", "PRESIDENCIA",
                                                    col)
@@ -386,7 +386,7 @@ def main_assignment():
             part_key, text_val = identify_tesoros_perlas(weekly_df, r, col)
             if part_key == "Tesoros" and not tesoros_found:
                 cand_t = get_top_candidates(df_people, df_history,
-                                            "Tesoros", mtg_date, assigned_today, top_n=3)
+                                            "Tesoros", mtg_date, assigned_today, top_n=5)
                 chosen_t = pick_candidate_interactively(cand_t, df_people, df_history,
                                                         "Tesoros", "TESOROS", col,
                                                         assignment_text=text_val)
@@ -397,7 +397,7 @@ def main_assignment():
                 tesoros_found = True
             elif part_key == "Perlas" and not perlas_found:
                 cand_p = get_top_candidates(df_people, df_history,
-                                            "Perlas", mtg_date, assigned_today, top_n=3)
+                                            "Perlas", mtg_date, assigned_today, top_n=5)
                 chosen_p = pick_candidate_interactively(cand_p, df_people, df_history,
                                                         "Perlas", "PERLAS", col,
                                                         assignment_text=text_val)
@@ -513,11 +513,11 @@ def main_assignment():
             cat1, txt1 = other_nvc[0]
             part1 = "NVC" if cat1 == "NVC" else "Necesidades"
             cand_n1 = get_top_candidates(df_people, df_history, part1,
-                                         mtg_date, assigned_today, top_n=3)
+                                         mtg_date, assigned_today, top_n=5)
             chosen_1 = pick_candidate_interactively(cand_n1, df_people, df_history,
                                                     part1, "NVC1", col,
                                                     assignment_text=txt1,
-                                                    top_n=3)
+                                                    top_n=5)
             if chosen_1:
                 df_final.at["NVC1", col] = chosen_1
                 assigned_today.add(chosen_1)
@@ -528,11 +528,11 @@ def main_assignment():
             cat2, txt2 = other_nvc[1]
             part2 = "NVC" if cat2 == "NVC" else "Necesidades"
             cand_n2 = get_top_candidates(df_people, df_history, part2,
-                                         mtg_date, assigned_today, top_n=3)
+                                         mtg_date, assigned_today, top_n=5)
             chosen_2 = pick_candidate_interactively(cand_n2, df_people, df_history,
                                                     part2, "NVC2", col,
                                                     assignment_text=txt2,
-                                                    top_n=3)
+                                                    top_n=5)
             if chosen_2:
                 df_final.at["NVC2", col] = chosen_2
                 assigned_today.add(chosen_2)
@@ -542,11 +542,11 @@ def main_assignment():
         if len(ebc_ent) > 0:
             ebc_cat, ebc_txt = ebc_ent[0]
             cand_ebc = get_top_candidates(df_people, df_history, "EBC",
-                                          mtg_date, assigned_today, top_n=3)
+                                          mtg_date, assigned_today, top_n=5)
             chosen_ebc = pick_candidate_interactively(cand_ebc, df_people, df_history,
                                                       "EBC", "EBC", col,
                                                       assignment_text=ebc_txt,
-                                                      top_n=3)
+                                                      top_n=5)
             if chosen_ebc:
                 df_final.at["EBC", col] = chosen_ebc
                 assigned_today.add(chosen_ebc)
@@ -554,10 +554,10 @@ def main_assignment():
 
         #--- 6) LECTOR EBC
         cand_le = get_top_candidates(df_people, df_history, "Lector EBC",
-                                     mtg_date, assigned_today, top_n=3)
+                                     mtg_date, assigned_today, top_n=5)
         chosen_le = pick_candidate_interactively(cand_le, df_people, df_history,
                                                  "Lector EBC", "LECTOR EBC", col,
-                                                 top_n=3)
+                                                 top_n=5)
         if chosen_le:
             df_final.at["LECTOR EBC", col] = chosen_le
             assigned_today.add(chosen_le)
@@ -565,10 +565,10 @@ def main_assignment():
 
         #--- 7) ORACION
         cand_or = get_top_candidates(df_people, df_history, "Oraciones",
-                                     mtg_date, assigned_today, top_n=3)
+                                     mtg_date, assigned_today, top_n=5)
         chosen_or = pick_candidate_interactively(cand_or, df_people, df_history,
                                                  "Oraciones", "ORACION", col,
-                                                 top_n=3)
+                                                 top_n=5)
         if chosen_or:
             df_final.at["ORACION", col] = chosen_or
             assigned_today.add(chosen_or)
@@ -588,11 +588,11 @@ def main_assignment():
                 cand_le_sb = get_top_candidates(df_people, df_history,
                                                 "Lectura Sala B",
                                                 mtg_date, assigned_today,
-                                                top_n=3, required_gender="V")
+                                                top_n=5, required_gender="V")
                 chosen_le_sb = pick_candidate_interactively(cand_le_sb, df_people, df_history,
                                                             "Lectura Sala B", "LECTURA Sala B",
                                                             col, assignment_text=lect_text,
-                                                            top_n=3)
+                                                            top_n=5)
                 if chosen_le_sb:
                     df_final.at["LECTURA Sala B", col] = chosen_le_sb
                     assigned_today.add(chosen_le_sb)
@@ -669,11 +669,11 @@ def main_assignment():
             # --- Additional overall SALA B assignment ---
             print(f"\n=== Overall SALA B Assignment on {col} ===")
             # Use "Sala B" as the part key so that get_top_candidates looks in the people_data column "Sala B"
-            cand_sala_b = get_top_candidates(df_people, df_history, "Sala B", mtg_date, assigned_today, top_n=3)
+            cand_sala_b = get_top_candidates(df_people, df_history, "Sala B", mtg_date, assigned_today, top_n=5)
             chosen_sala_b = pick_candidate_interactively(
                 cand_sala_b, df_people, df_history,
                 "Sala B", "SALA B", col,
-                assignment_text="Overall SALA B Assignment", top_n=3
+                assignment_text="Overall SALA B Assignment", top_n=5
             )
             if chosen_sala_b:
                 df_final.at["SALA B", col] = chosen_sala_b
